@@ -37,7 +37,7 @@ var versionCmd = &cobra.Command{
 		}
 		if isNewer(latest, Version) {
 			cmd.Printf("A newer version (%s) is available.\n", latest)
-			cmd.Printf("Visit %s/releases/latest to update.\n", RepoURL)
+			cmd.Printf("Run `csp self-update` to install it, or visit %s/releases/latest\n", RepoURL)
 		} else {
 			cmd.Println("You are running the latest version.")
 		}
@@ -48,27 +48,49 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
-// ghRelease is the slice of GitHub's /releases/latest payload that csp cares
-// about — just the tag for version comparison.
-type ghRelease struct {
-	TagName string `json:"tag_name"`
+// ghAsset is a single binary attached to a GitHub release.
+type ghAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
 }
 
-// checkLatestRelease asks GitHub for the latest published release of the
-// current RepoURL and returns the tag. Five-second timeout so an unreachable
-// network doesn't make `csp version` feel hung.
-func checkLatestRelease() (string, error) {
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(buildAPIURL(RepoURL))
+// ghRelease is the slice of GitHub's /releases/latest payload csp cares about:
+// the tag for version comparison, the body for release notes shown at the
+// self-update confirm prompt, and the assets list so self-update can find the
+// right binary.
+type ghRelease struct {
+	TagName string    `json:"tag_name"`
+	Body    string    `json:"body"`
+	Assets  []ghAsset `json:"assets"`
+}
+
+// fetchLatestRelease asks GitHub's /releases/latest endpoint at apiURL and
+// returns the parsed payload. The caller supplies the http.Client so it can
+// pick an appropriate timeout — `version` wants a short one so a flaky
+// network doesn't make the command feel hung, while `self-update` needs
+// longer for a multi-MB download.
+func fetchLatestRelease(client *http.Client, apiURL string) (*ghRelease, error) {
+	resp, err := client.Get(apiURL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
 	var rel ghRelease
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return nil, err
+	}
+	return &rel, nil
+}
+
+// checkLatestRelease is a slim wrapper around fetchLatestRelease that returns
+// just the tag — the `version` command doesn't need anything else.
+func checkLatestRelease() (string, error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	rel, err := fetchLatestRelease(client, buildAPIURL(RepoURL))
+	if err != nil {
 		return "", err
 	}
 	return rel.TagName, nil
