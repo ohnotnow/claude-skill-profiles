@@ -24,6 +24,17 @@ func Default() (string, error) {
 	return filepath.Join(cwd, ".claude", "settings.local.json"), nil
 }
 
+// GlobalPath returns Claude Code's user-wide settings file: ~/.claude/settings.json.
+// New profiles seed their defaults from the skillOverrides block here so the
+// user starts from "current state", not a blank slate.
+func GlobalPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".claude", "settings.json"), nil
+}
+
 // ReadSkillOverrides returns the existing skillOverrides map from path, or an
 // empty map if the file or key is missing.
 func ReadSkillOverrides(path string) (map[string]string, error) {

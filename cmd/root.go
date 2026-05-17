@@ -21,7 +21,9 @@ or off) and apply it to any project with: csp apply <name>.
 Profiles live in ~/.config/csp/profiles/<name>.yaml and edit Claude Code's
 .claude/settings.local.json when applied. Running csp with no arguments opens
 the interactive TUI — the primary way to edit profiles.`,
-	Args: cobra.NoArgs,
+	Args:          cobra.NoArgs,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return tui.Run()
 	},

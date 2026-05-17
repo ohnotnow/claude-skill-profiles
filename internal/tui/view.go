@@ -259,25 +259,22 @@ func (m *model) renderFooter() string {
 		if m.focus == paneProfiles {
 			helpLine = helpJoin(m.theme,
 				kv("↑↓/jk", "nav"),
-				kv("enter/→", "edit"),
+				kv("tab/→", "edit"),
 				kv("n", "new"),
 				kv("a", "apply"),
 				kv("e", "$EDITOR"),
 				kv("d", "delete"),
 				kv("r", "reload"),
-				kv("tab", "switch"),
 				kv("q", "quit"),
 			)
 		} else {
 			helpLine = helpJoin(m.theme,
 				kv("↑↓/jk", "nav"),
-				kv("1", "enabled"),
-				kv("2", "name-only"),
-				kv("3", "user-only"),
-				kv("4", "off"),
+				kv("1/2/3/4", "set + advance"),
+				kv("tab", "cycle"),
 				kv("/", "filter"),
 				kv("s", "sort"),
-				kv("tab/esc", "back"),
+				kv("esc/←", "back"),
 				kv("q", "quit"),
 			)
 		}

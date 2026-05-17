@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"claude-skill-profiles/internal/profile"
+	"claude-skill-profiles/internal/settings"
 	"claude-skill-profiles/internal/skill"
 )
 
@@ -35,11 +36,19 @@ func runNew(cmd *cobra.Command, profileName string) error {
 	if err != nil {
 		return err
 	}
-
-	p := profile.New()
-	for _, s := range skills {
-		p.Set(s.Name, profile.StateEnabled)
+	names := make([]string, len(skills))
+	for i, s := range skills {
+		names[i] = s.Name
 	}
+
+	// Seed from the global ~/.claude/settings.json so the profile starts as a
+	// snapshot of current state, not a blank slate. Missing file is fine.
+	var globalOverrides map[string]string
+	if globalPath, err := settings.GlobalPath(); err == nil {
+		globalOverrides, _ = settings.ReadSkillOverrides(globalPath)
+	}
+
+	p := profile.SeedFromOverrides(names, globalOverrides)
 
 	store := profile.DefaultStore()
 	if err := store.Save(profileName, p, false); err != nil {
@@ -50,8 +59,9 @@ func runNew(cmd *cobra.Command, profileName string) error {
 	}
 
 	path, _ := store.Path(profileName)
-	cmd.Printf("Created profile %q at %s (%d skill(s) seeded as enabled)\n", profileName, path, len(skills))
-	cmd.Printf("Edit interactively with: csp (TUI, once it lands)\n")
+	cmd.Printf("Created profile %q at %s\n", profileName, path)
+	cmd.Printf("Seeded %d skill(s) — %d non-default from ~/.claude/settings.json\n", len(skills), len(p.ToSkillOverrides()))
+	cmd.Printf("Edit interactively with: csp\n")
 	cmd.Printf("Or open in $EDITOR with:  csp edit %s\n", profileName)
 	return nil
 }

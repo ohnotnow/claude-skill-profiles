@@ -254,16 +254,6 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c", "q":
 		m.quitting = true
 		return m, tea.Quit
-	case "tab":
-		if len(m.profiles) > 0 {
-			if m.focus == paneProfiles {
-				m.focus = paneSkills
-			} else {
-				m.focus = paneProfiles
-			}
-		}
-		m.clearStatus()
-		return m, nil
 	}
 
 	switch m.focus {
@@ -277,6 +267,12 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *model) handleProfilesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "tab":
+		if len(m.profiles) > 0 {
+			m.focus = paneSkills
+			m.clearStatus()
+		}
+		return m, nil
 	case "j", "down":
 		if len(m.profiles) == 0 {
 			return m, nil
@@ -343,13 +339,17 @@ func (m *model) handleSkillsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = paneProfiles
 		m.clearStatus()
 	case "1":
-		m.setHighlightedState(profile.StateEnabled)
+		m.setHighlightedState(profile.StateEnabled, true)
 	case "2":
-		m.setHighlightedState(profile.StateNameOnly)
+		m.setHighlightedState(profile.StateNameOnly, true)
 	case "3":
-		m.setHighlightedState(profile.StateUserInvocable)
+		m.setHighlightedState(profile.StateUserInvocable, true)
 	case "4":
-		m.setHighlightedState(profile.StateOff)
+		m.setHighlightedState(profile.StateOff, true)
+	case "tab":
+		m.cycleHighlightedState(+1)
+	case "shift+tab":
+		m.cycleHighlightedState(-1)
 	case "/":
 		m.startFilter()
 	case "s":
@@ -365,7 +365,10 @@ func (m *model) handleSkillsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) setHighlightedState(s profile.State) {
+// setHighlightedState sets the highlighted skill's state, auto-saves, and
+// optionally advances the cursor to the next skill. The 1/2/3/4 path advances
+// (rapid-fire ergonomics); the tab-to-cycle path doesn't (dwell on one skill).
+func (m *model) setHighlightedState(s profile.State, advance bool) {
 	if m.profile == nil || len(m.filtered) == 0 {
 		return
 	}
@@ -378,9 +381,42 @@ func (m *model) setHighlightedState(s profile.State) {
 		return
 	}
 	m.status = fmt.Sprintf("%s → %s", skillName, s)
+
+	if advance && m.skillIdx < len(m.filtered)-1 {
+		m.skillIdx++
+	}
+
 	if m.sortMode == sortByState {
 		m.recomputeFiltered()
 	}
+}
+
+// cycleHighlightedState shifts the highlighted skill's state one step in the
+// given direction (+1 forward, -1 back) through AllStates, wrapping at the
+// edges. Doesn't advance the cursor — you cycle to find the right state, then
+// j/k or 1/2/3/4 to move on.
+func (m *model) cycleHighlightedState(dir int) {
+	if m.profile == nil || len(m.filtered) == 0 {
+		return
+	}
+	idx := m.filtered[m.skillIdx]
+	current := m.profile.Get(m.skills[idx].Name)
+	next := stepState(current, dir)
+	m.setHighlightedState(next, false)
+}
+
+// stepState returns the state dir steps from s in profile.AllStates, wrapping.
+func stepState(s profile.State, dir int) profile.State {
+	states := profile.AllStates
+	cur := 0
+	for i, st := range states {
+		if st == s {
+			cur = i
+			break
+		}
+	}
+	n := (cur + dir + len(states)) % len(states)
+	return states[n]
 }
 
 // --- filter mode ---
@@ -440,10 +476,15 @@ func (m *model) handleNewNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status = err.Error()
 			return m, nil
 		}
-		p := profile.New()
-		for _, s := range m.skills {
-			p.Set(s.Name, profile.StateEnabled)
+		names := make([]string, len(m.skills))
+		for i, s := range m.skills {
+			names[i] = s.Name
 		}
+		var globalOverrides map[string]string
+		if gp, err := settings.GlobalPath(); err == nil {
+			globalOverrides, _ = settings.ReadSkillOverrides(gp)
+		}
+		p := profile.SeedFromOverrides(names, globalOverrides)
 		if err := m.store.Save(name, p, false); err != nil {
 			m.status = err.Error()
 			return m, nil
