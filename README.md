@@ -4,6 +4,8 @@ A small CLI and TUI for managing Claude Code skill exposure on a per-project bas
 
 Define a named profile once (which skills are enabled, name-only, user-invocable-only, or off) and apply it to any project with a single command. `csp` writes the matching `skillOverrides` block to that project's `.claude/settings.local.json` and leaves every other top-level key alone.
 
+![screenshot](screenshot.png)
+
 ## What it does
 
 If you use Claude Code with a lot of skills installed, you've probably noticed that different projects want different sets exposed. A Laravel project wants `flux-ui` and `modern-livewire` but not `golang`. A Go project wants `golang` but not `larastan`. Toggling these by hand in `.claude/settings.local.json` every time you switch projects is tedious.
