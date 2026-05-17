@@ -1,0 +1,7 @@
+/claude-skill-profiles
+PROJECT_IDEA.md
+/csp
+*.exe
+.env
+.ant/
+.ait/
