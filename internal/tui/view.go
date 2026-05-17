@@ -132,6 +132,7 @@ func (m *model) renderSkillPane(width, height int) string {
 	var lines []string
 	lines = append(lines, title)
 	lines = append(lines, subline)
+	lines = append(lines, m.renderStateLegend())
 	lines = append(lines, "")
 
 	if m.profile == nil {
@@ -144,7 +145,7 @@ func (m *model) renderSkillPane(width, height int) string {
 		}
 	} else {
 		// Determine visible window.
-		visible := height - 4 // title + subline + blank + bottom border
+		visible := height - 5 // title + subline + legend + blank + bottom border
 		if visible < 1 {
 			visible = 1
 		}
@@ -212,6 +213,24 @@ func (m *model) renderSkillRow(rowIdx int, active bool, width int) string {
 	return fmt.Sprintf("%s%s %s %s", marker, glyph, stateLabel, name)
 }
 
+// renderStateLegend renders the "1 ✓ enabled   2 ● name-only   …" hint that
+// lives at the top of the skill pane — it spells out which number maps to
+// which state so the footer doesn't have to.
+func (m *model) renderStateLegend() string {
+	items := []string{
+		m.legendItem("1", profile.StateEnabled, "enabled"),
+		m.legendItem("2", profile.StateNameOnly, "name-only"),
+		m.legendItem("3", profile.StateUserInvocable, "user-only"),
+		m.legendItem("4", profile.StateOff, "off"),
+	}
+	return strings.Join(items, "   ")
+}
+
+func (m *model) legendItem(key string, state profile.State, label string) string {
+	glyph, style := m.glyphFor(state)
+	return m.theme.HelpKey.Render(key) + " " + glyph + " " + style.Render(label)
+}
+
 func (m *model) glyphFor(s profile.State) (string, lipgloss.Style) {
 	switch s {
 	case profile.StateEnabled:
@@ -270,7 +289,6 @@ func (m *model) renderFooter() string {
 		} else {
 			helpLine = helpJoin(m.theme,
 				kv("↑↓/jk", "nav"),
-				kv("1/2/3/4", "set + advance"),
 				kv("tab", "cycle"),
 				kv("/", "filter"),
 				kv("s", "sort"),
