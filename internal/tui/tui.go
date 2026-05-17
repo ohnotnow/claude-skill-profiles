@@ -81,6 +81,10 @@ type model struct {
 	input   textinput.Model
 	confirm string // text shown while in a confirm mode
 
+	// pendingAll is set after the user presses `a` in the skills pane,
+	// arming a bulk-set on the next 1/2/3/4 keypress (vim-style prefix).
+	pendingAll bool
+
 	status string
 	err    error
 
@@ -322,7 +326,39 @@ func (m *model) handleProfilesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) handleSkillsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// vim-style prefix: `a` then 1/2/3/4 sets every filtered skill at once.
+	// Any other follow-up key cancels the prefix.
+	if m.pendingAll {
+		m.pendingAll = false
+		switch msg.String() {
+		case "1":
+			m.setAllFiltered(profile.StateEnabled)
+		case "2":
+			m.setAllFiltered(profile.StateNameOnly)
+		case "3":
+			m.setAllFiltered(profile.StateUserInvocable)
+		case "4":
+			m.setAllFiltered(profile.StateOff)
+		case "esc":
+			m.status = "Cancelled"
+		default:
+			m.status = "Cancelled (a needs 1/2/3/4)"
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
+	case "a":
+		if m.profile == nil || len(m.filtered) == 0 {
+			return m, nil
+		}
+		m.pendingAll = true
+		scope := "all"
+		if m.filter != "" {
+			scope = "filtered"
+		}
+		m.status = fmt.Sprintf("a → press 1/2/3/4 to set %d %s skill(s)  (esc cancels)", len(m.filtered), scope)
+		return m, nil
 	case "j", "down":
 		if m.skillIdx < len(m.filtered)-1 {
 			m.skillIdx++
@@ -403,6 +439,31 @@ func (m *model) cycleHighlightedState(dir int) {
 	current := m.profile.Get(m.skills[idx].Name)
 	next := stepState(current, dir)
 	m.setHighlightedState(next, false)
+}
+
+// setAllFiltered sets every skill currently in m.filtered to s, in a single
+// save. Honours the filter so a user can scope the bulk-set by typing into the
+// filter input first (e.g. /laravel then a4 to off every laravel-* skill).
+func (m *model) setAllFiltered(s profile.State) {
+	if m.profile == nil || len(m.filtered) == 0 {
+		return
+	}
+	for _, idx := range m.filtered {
+		m.profile.Set(m.skills[idx].Name, s)
+	}
+	if err := m.store.Save(m.profileName, m.profile, true); err != nil {
+		m.err = err
+		m.status = "Save failed: " + err.Error()
+		return
+	}
+	scope := "all"
+	if m.filter != "" {
+		scope = fmt.Sprintf("filtered (%q)", m.filter)
+	}
+	m.status = fmt.Sprintf("Set %d %s skill(s) to %s", len(m.filtered), scope, s)
+	if m.sortMode == sortByState {
+		m.recomputeFiltered()
+	}
 }
 
 // stepState returns the state dir steps from s in profile.AllStates, wrapping.

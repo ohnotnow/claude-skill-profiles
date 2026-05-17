@@ -290,6 +290,7 @@ func (m *model) renderFooter() string {
 			helpLine = helpJoin(m.theme,
 				kv("↑↓/jk", "nav"),
 				kv("tab", "cycle"),
+				kv("a1-4", "all"),
 				kv("/", "filter"),
 				kv("s", "sort"),
 				kv("esc/←", "back"),
