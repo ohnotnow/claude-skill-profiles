@@ -37,6 +37,12 @@ func (m *model) View() string {
 		bodyHeight = 6
 	}
 
+	if m.customMode {
+		// Single-pane layout — the skills editor takes the full width.
+		body := m.renderSkillPane(m.width, bodyHeight)
+		return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	}
+
 	left := m.renderProfilePane(bodyHeight)
 	right := m.renderSkillPane(m.width-leftPaneW-2, bodyHeight)
 
@@ -49,7 +55,15 @@ func (m *model) View() string {
 func (m *model) renderHeader() string {
 	title := m.theme.TitleActive.Render("csp") +
 		m.theme.Dim.Render(" — claude-skill-profiles")
-	right := m.theme.Dim.Render(m.skillsDir)
+	if m.customMode {
+		title = m.theme.TitleActive.Render("csp custom") +
+			m.theme.Dim.Render(" — editing this project (no profile)")
+	}
+	rightText := m.skillsDir
+	if m.customMode {
+		rightText = m.customPath
+	}
+	right := m.theme.Dim.Render(rightText)
 	gap := m.width - lipgloss.Width(title) - lipgloss.Width(right)
 	if gap < 1 {
 		gap = 1
@@ -278,7 +292,18 @@ func (m *model) renderFooter() string {
 	case modeConfirmApply, modeConfirmDelete:
 		helpLine = m.theme.Status.Width(m.width).Render(m.confirm)
 	default:
-		if m.focus == paneProfiles {
+		switch {
+		case m.customMode:
+			helpLine = helpJoin(m.theme,
+				kv("↑↓/jk", "nav"),
+				kv("1-4", "set"),
+				kv("tab", "cycle"),
+				kv("a1-4", "all"),
+				kv("/", "filter"),
+				kv("s", "sort"),
+				kv("q", "quit"),
+			)
+		case m.focus == paneProfiles:
 			helpLine = helpJoin(m.theme,
 				kv("↑↓/jk", "nav"),
 				kv("tab/→", "edit"),
@@ -290,7 +315,7 @@ func (m *model) renderFooter() string {
 				kv("R", "reload"),
 				kv("q", "quit"),
 			)
-		} else {
+		default:
 			helpLine = helpJoin(m.theme,
 				kv("↑↓/jk", "nav"),
 				kv("tab", "cycle"),

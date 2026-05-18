@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-18
+
+### Added
+- `csp custom` command — open the skill editor pointed directly at the current project's `.claude/settings.local.json` rather than at a named profile. Every toggle auto-saves to the project file. For projects that sit at an angle to every existing profile (a Bun project that wants a couple of extra skills, a Laravel Zero CLI with no Livewire, and so on), this avoids both hand-editing JSON and cluttering the profile list with single-use entries. On a brand-new project the editor seeds from your global `~/.claude/settings.json` and writes the file out on launch, so you end up with a real settings file whether or not you toggle anything.
+- `csp promote <name>` command — lift the current project's `skillOverrides` into a new named profile under `~/.config/csp/profiles/`. Useful when an ad-hoc tweak (typically from `csp custom`) turns out to be a pattern worth reusing across projects. Refuses to overwrite an existing profile unless `--force` is supplied.
+
 ## [1.1.0] - 2026-05-18
 
 ### Added
@@ -25,7 +31,8 @@ First public release.
 
 Initial development snapshot.
 
-[Unreleased]: https://github.com/ohnotnow/claude-skill-profiles/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/ohnotnow/claude-skill-profiles/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/ohnotnow/claude-skill-profiles/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ohnotnow/claude-skill-profiles/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ohnotnow/claude-skill-profiles/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/ohnotnow/claude-skill-profiles/releases/tag/v0.1.0

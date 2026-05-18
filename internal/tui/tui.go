@@ -114,6 +114,21 @@ type model struct {
 
 	quitting bool
 
+	// save is the callback the skills-pane uses to persist the currently-loaded
+	// profile. The main TUI sets this to write back to the named profile YAML
+	// via m.store; csp custom replaces it with a callback that writes directly
+	// to the project's .claude/settings.local.json. The skills-pane never calls
+	// m.store.Save directly — it goes through this hook so the editor widget
+	// is reusable across save targets.
+	save func(*profile.Profile) error
+
+	// customMode is true when the TUI is editing the project's
+	// .claude/settings.local.json directly rather than a named profile.
+	// In this mode the profile pane is hidden, profile-management keys are
+	// disabled, and the header advertises the project file path. See ADR-003.
+	customMode bool
+	customPath string
+
 	// Refresh-screen state. `screen` decides which screen Update/View dispatch
 	// to; `refresh` carries the refresh screen's own model (lazily created).
 	// `returnsToMain` is true when refresh was entered via the `r` keypress
@@ -160,6 +175,9 @@ func initialModel() (*model, error) {
 		profiles:  names,
 		input:     ti,
 		focus:     paneProfiles,
+	}
+	m.save = func(p *profile.Profile) error {
+		return m.store.Save(m.profileName, p, true)
 	}
 
 	if len(names) > 0 {
@@ -294,6 +312,11 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
+	// Custom mode has no profile pane — every keypress goes to the skills pane.
+	if m.customMode {
+		return m.handleSkillsKey(msg)
+	}
+
 	switch m.focus {
 	case paneProfiles:
 		return m.handleProfilesKey(msg)
@@ -412,6 +435,10 @@ func (m *model) handleSkillsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "G", "end":
 		m.skillIdx = max0(len(m.filtered) - 1)
 	case "esc", "h", "left":
+		// In custom mode there's no profile pane to return to; swallow the key.
+		if m.customMode {
+			return m, nil
+		}
 		m.focus = paneProfiles
 		m.clearStatus()
 	case "1":
@@ -451,7 +478,7 @@ func (m *model) setHighlightedState(s profile.State, advance bool) {
 	idx := m.filtered[m.skillIdx]
 	skillName := m.skills[idx].Name
 	m.profile.Set(skillName, s)
-	if err := m.store.Save(m.profileName, m.profile, true); err != nil {
+	if err := m.save(m.profile); err != nil {
 		m.err = err
 		m.status = "Save failed: " + err.Error()
 		return
@@ -491,7 +518,7 @@ func (m *model) setAllFiltered(s profile.State) {
 	for _, idx := range m.filtered {
 		m.profile.Set(m.skills[idx].Name, s)
 	}
-	if err := m.store.Save(m.profileName, m.profile, true); err != nil {
+	if err := m.save(m.profile); err != nil {
 		m.err = err
 		m.status = "Save failed: " + err.Error()
 		return

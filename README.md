@@ -68,10 +68,21 @@ That writes the profile's `skillOverrides` to `./.claude/settings.local.json`.
 | `csp show <name>` | Print a profile's skills grouped by state |
 | `csp diff <name>` | Show what `csp apply <name>` would change in the current directory |
 | `csp apply <name>` | Write the profile to `./.claude/settings.local.json` |
+| `csp custom` | Edit the current project's `.claude/settings.local.json` directly, no profile involved |
+| `csp promote <name>` | Save the current project's `skillOverrides` as a new named profile (`--force` to overwrite) |
 | `csp edit <name>` | Open the profile YAML in `$EDITOR` (escape hatch) |
 | `csp refresh` | Triage newly-installed skills across every profile (TUI) |
 | `csp prune` | Drop profile entries for skills no longer installed (use `--dry-run` to preview) |
 | `csp version` | Print the version and check for updates |
+
+## One-off projects
+
+Most projects map cleanly to a named profile (`csp apply golang`, `csp apply laravel`, and so on). Occasionally a project sits at an angle to every existing profile — "basically a Bun project, but it could really do with the `executive-dashboard` and `uofg-design-system` skills", say. For those cases there are two extra commands:
+
+- **`csp custom`** opens the skill editor pointed straight at the current project's `.claude/settings.local.json` rather than at a named profile. Every toggle saves directly to the project file. If there's no settings file yet, the editor seeds from your global `~/.claude/settings.json` and writes the file out on launch — so you start from current global state, not a blank slate, and you end up with a real file on disk whether or not you toggle anything.
+- **`csp promote <name>`** lifts the current project's `skillOverrides` into a fresh profile under `~/.config/csp/profiles/`. Useful when an ad-hoc tweak turns out to be a pattern worth reusing. Add `--force` to overwrite an existing profile.
+
+A common flow: `csp apply bun && csp custom` to lay down the baseline and then tweak from there, with `csp promote my-pattern` if the result deserves a permanent home.
 
 ## When `~/.claude/skills/` changes
 
@@ -148,7 +159,7 @@ Skill discovery walks `~/.claude/skills/`. Plugin-provided skills are out of sco
 go test ./...
 ```
 
-Around 30 unit tests covering YAML round-tripping, skill discovery, settings I/O, version comparison and profile storage. The TUI itself isn't unit-tested; it's small enough to check by running it.
+Around 80 unit tests covering YAML round-tripping, skill discovery, settings I/O, version comparison, profile storage and the load/save helpers behind `csp custom` and `csp promote`. The TUI itself isn't unit-tested; it's small enough to check by running it.
 
 ## Contributing
 
