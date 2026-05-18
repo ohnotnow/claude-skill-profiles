@@ -69,7 +69,16 @@ That writes the profile's `skillOverrides` to `./.claude/settings.local.json`.
 | `csp diff <name>` | Show what `csp apply <name>` would change in the current directory |
 | `csp apply <name>` | Write the profile to `./.claude/settings.local.json` |
 | `csp edit <name>` | Open the profile YAML in `$EDITOR` (escape hatch) |
+| `csp refresh` | Triage newly-installed skills across every profile (TUI) |
+| `csp prune` | Drop profile entries for skills no longer installed (use `--dry-run` to preview) |
 | `csp version` | Print the version and check for updates |
+
+## When `~/.claude/skills/` changes
+
+Skills come and go. `csp` keeps your profiles in step:
+
+- **Adding a skill.** Profiles aren't updated automatically — new skills simply fall back to Claude Code's default (`enabled`) when `csp apply` runs. To triage a new skill across every profile in one pass, run `csp refresh` (or press `r` from the main TUI's profile pane). A flipped-pane screen lists the new skills on the left and your profiles on the right; `1`/`2`/`3`/`4` sets the state per profile, `a` then a digit bulks across every profile, and `enter` accepts the safe default (`user-invocable-only`) for any profile that still hasn't been touched. The default leans towards "off but still reachable via `/skill-name`" — a new skill is unlikely to belong in every project, and you can always promote it.
+- **Removing a skill.** The TUI auto-prunes on launch — any profile entries referring to skills you've deleted from `~/.claude/skills/` are silently dropped. For headless use (e.g. a shell function that deletes a skill and tidies profiles in one go), run `csp prune`; `csp prune --dry-run` shows what would change.
 
 ## TUI keybindings
 
@@ -83,7 +92,8 @@ That writes the profile's `skillOverrides` to `./.claude/settings.local.json`.
 | `a` | Apply highlighted profile to the current directory |
 | `e` | Open profile in `$EDITOR` |
 | `d` | Delete profile (with confirm) |
-| `r` | Reload from disk |
+| `r` | Refresh — triage newly-installed skills |
+| `R` | Reload profiles from disk |
 | `q` | Quit |
 
 **Skill editor (right):**
@@ -99,6 +109,17 @@ That writes the profile's `skillOverrides` to `./.claude/settings.local.json`.
 | `esc` / `←` | Back to profile pane |
 
 The `a`+digit bulk action respects the active filter. So `/laravel` then `a4` will set every `laravel-*` skill to `off` and leave everything else alone.
+
+**Refresh screen (`r` from profile pane, or `csp refresh`):**
+
+| Key | Action |
+|---|---|
+| `↑` `↓` / `j` `k` | Navigate within the focused pane |
+| `tab` / `shift+tab` | Switch between new-skills pane and profiles pane |
+| `1` `2` `3` `4` | Set state for the highlighted (skill, profile) pair, advance the profile cursor |
+| `a` then `1`/`2`/`3`/`4` | Bulk-set the highlighted skill across every profile |
+| `enter` | Accept the safe default (`user-invocable-only`) for every profile still missing this skill |
+| `esc` / `q` | Back to main TUI (or quit, if launched via `csp refresh`) |
 
 ## Configuration
 

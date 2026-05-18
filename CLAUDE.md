@@ -24,12 +24,16 @@ main.go              entry; rewrites --version to `version` then calls cmd.Execu
 cmd/                 cobra commands (one file per subcommand)
   root.go            rootCmd; running `csp` with no args opens the TUI
   list.go new.go show.go diff.go apply.go edit.go
+  prune.go           non-interactive `csp prune` (with --dry-run)
+  refresh.go         opens the refresh TUI; thin shim over tui.RunRefresh
   version.go         version + GitHub release-check machinery (fetchLatestRelease etc.)
   self_update.go     mirrors ait's self-update; entire implementation lives here
 internal/profile/    Profile YAML schema, Store (load/save/list), SeedFromOverrides
+  prune.go           Profile.Prune + PruneAll for drift handling
 internal/skill/      Discover() walks ~/.claude/skills/, parses SKILL.md frontmatter
 internal/settings/   ReadSkillOverrides / ApplySkillOverrides for .claude/settings.local.json
-internal/tui/        Bubble Tea model (tui.go, view.go, styles.go)
+internal/tui/        Bubble Tea model (tui.go, view.go, styles.go, state.go)
+  refresh.go         the refresh-screen model/view; refresh_helpers.go has the pure bits
 ```
 
 ## Key invariants — read before changing things
@@ -40,6 +44,8 @@ internal/tui/        Bubble Tea model (tui.go, view.go, styles.go)
 - **Profile YAML is explicit.** Every discovered skill gets an entry; `enabled` entries are dropped when serialising to `skillOverrides` (since enabled is Claude Code's default).
 - **TUI auto-saves on every toggle.** No save key. If you add a destructive UI action, gate it behind a y/n confirm.
 - **`csp new` seeds from `~/.claude/settings.json`.** Users expect a new profile to be a snapshot of their current global config, not a blank slate. The seeding helper is `profile.SeedFromOverrides`.
+- **Auto-prune on TUI launch.** `tui.initialModel` calls `profile.PruneAll` against current skill discovery before anything else. Silent — no banner, no status. Removes profile entries referring to skills no longer in `~/.claude/skills/`. The user's mental model is "if I deleted a skill, csp should reflect reality" (ant ADR-002, `csp-XKtxA`). `csp prune` is the headless equivalent.
+- **Refresh defaults to `user-invocable-only`.** When `csp refresh` (or `r` in the TUI) surfaces a skill missing from one or more profiles, the displayed default for the not-yet-committed pairs is `user-invocable-only`, not `enabled`. New skills are unlikely to belong in every project; this leaves them reachable via `/skill-name` without exposing them to autonomous selection. The fallback in `Profile.Get` for unmapped skills *during apply* stays `StateEnabled` — that's Claude Code's own default and the right answer for untriaged skills.
 - **Dev builds skip the network.** `Version == "dev"` is the sentinel; `csp version` and `csp self-update` short-circuit before any HTTP call. Release builds get the real version/RepoURL injected via `-ldflags`.
 
 ## How to work on it
@@ -67,6 +73,7 @@ Key entries:
 - `csp-AkRXV` — foundation (what this is and isn't)
 - `csp-VYQvH` — ADR-001 (replace-not-merge, `~/.claude/skills/` only, YAML, CLI surface, TUI shape)
 - `csp-sYVTv` — pivot: the TUI became the *primary* edit surface, not a polish layer over `$EDITOR`. Number keys aim at a state directly; cycling was rejected as the only path.
+- `csp-XKtxA` — ADR-002 (handling skill-set drift: auto-prune on TUI launch + `csp prune`, `csp refresh` for triaging new skills, the `user-invocable-only` default).
 
 If you're about to relitigate one of these decisions, read the entry first.
 
@@ -82,9 +89,11 @@ There's also an `ait` history of the v1.0.0 build (`ait log`) if you want to see
 
 ## TUI keybindings (so you don't have to reverse-engineer)
 
-Profile pane: `j/k` nav, `tab/→` switch to skills, `n` new, `a` apply, `e` `$EDITOR`, `d` delete, `r` reload, `q` quit.
+Profile pane: `j/k` nav, `tab/→` switch to skills, `n` new, `a` apply, `e` `$EDITOR`, `d` delete, `r` refresh (triage new skills), `R` reload from disk, `q` quit.
 
 Skill editor: `j/k` nav, `1/2/3/4` set + auto-advance, `tab`/`shift+tab` cycle current skill, `a` then digit bulk-sets every filtered skill, `/` filter, `s` toggle sort, `esc/←` back.
+
+Refresh screen: `j/k` nav within focused pane, `tab/shift+tab` switch pane, `1/2/3/4` set (skill,profile) state + advance profiles, `a` then digit bulks the highlighted skill across every profile, `enter` writes `user-invocable-only` to any profile still missing the skill, `esc/q` back to main TUI (or quit if launched via `csp refresh`).
 
 ## Release process
 

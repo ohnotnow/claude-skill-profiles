@@ -30,7 +30,31 @@ func Run() error {
 	return err
 }
 
+// RunRefresh starts the TUI directly in the refresh screen. Used by
+// `csp refresh`. Returns an error if no profiles exist or there's nothing to
+// triage — callers (the cobra command) are expected to surface a friendly
+// message instead of opening an empty TUI.
+func RunRefresh() error {
+	m, err := initialModel()
+	if err != nil {
+		return err
+	}
+	if err := m.enterRefresh(false); err != nil {
+		return err
+	}
+	prog := tea.NewProgram(m, tea.WithAltScreen())
+	_, err = prog.Run()
+	return err
+}
+
 // --- model ---
+
+type screen int
+
+const (
+	screenMain screen = iota
+	screenRefresh
+)
 
 type focusPane int
 
@@ -89,18 +113,39 @@ type model struct {
 	err    error
 
 	quitting bool
+
+	// Refresh-screen state. `screen` decides which screen Update/View dispatch
+	// to; `refresh` carries the refresh screen's own model (lazily created).
+	// `returnsToMain` is true when refresh was entered via the `r` keypress
+	// in the main TUI — `esc`/`q` returns to the main screen instead of
+	// quitting the program.
+	screen        screen
+	refresh       *refreshState
+	returnsToMain bool
 }
 
 func initialModel() (*model, error) {
 	store := profile.DefaultStore()
-	names, err := store.List()
-	if err != nil {
-		return nil, fmt.Errorf("listing profiles: %w", err)
-	}
 	skillsDir := skill.DefaultDir()
 	skills, err := skill.Discover(skillsDir)
 	if err != nil {
 		return nil, fmt.Errorf("discovering skills: %w", err)
+	}
+
+	// Auto-prune on launch: drop any profile entries referring to skills that
+	// no longer exist on disk. Silent by design — the user's mental model is
+	// "if I deleted a skill, csp should reflect reality" (ant ADR-002).
+	// Individual profile load/save errors are ignored here; if a profile is
+	// genuinely broken the user will see it when they try to open it.
+	known := make([]string, len(skills))
+	for i, s := range skills {
+		known[i] = s.Name
+	}
+	profile.PruneAll(store, known)
+
+	names, err := store.List()
+	if err != nil {
+		return nil, fmt.Errorf("listing profiles: %w", err)
 	}
 
 	ti := textinput.New()
@@ -180,20 +225,6 @@ func (m *model) stateOf(skillIdx int) profile.State {
 	return m.profile.Get(m.skills[skillIdx].Name)
 }
 
-func stateRank(s profile.State) int {
-	switch s {
-	case profile.StateEnabled:
-		return 0
-	case profile.StateNameOnly:
-		return 1
-	case profile.StateUserInvocable:
-		return 2
-	case profile.StateOff:
-		return 3
-	}
-	return 99
-}
-
 func max0(n int) int {
 	if n < 0 {
 		return 0
@@ -211,6 +242,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tea.KeyMsg:
+		if m.screen == screenRefresh {
+			return m.handleRefreshKey(msg)
+		}
 		return m.handleKey(msg)
 	case editorFinishedMsg:
 		if msg.err != nil {
@@ -320,6 +354,12 @@ func (m *model) handleProfilesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.startConfirmDelete()
 		}
 	case "r":
+		if err := m.enterRefresh(true); err != nil {
+			// enterRefresh returns errors as friendly messages — surface
+			// them on the status line and stay on the main screen.
+			m.status = err.Error()
+		}
+	case "R":
 		m.reloadAll()
 	}
 	return m, nil
@@ -464,20 +504,6 @@ func (m *model) setAllFiltered(s profile.State) {
 	if m.sortMode == sortByState {
 		m.recomputeFiltered()
 	}
-}
-
-// stepState returns the state dir steps from s in profile.AllStates, wrapping.
-func stepState(s profile.State, dir int) profile.State {
-	states := profile.AllStates
-	cur := 0
-	for i, st := range states {
-		if st == s {
-			cur = i
-			break
-		}
-	}
-	n := (cur + dir + len(states)) % len(states)
-	return states[n]
 }
 
 // --- filter mode ---

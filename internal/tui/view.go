@@ -18,6 +18,9 @@ func (m *model) View() string {
 	if m.quitting {
 		return ""
 	}
+	if m.screen == screenRefresh {
+		return m.viewRefresh()
+	}
 	if m.width == 0 {
 		// Initial render before WindowSizeMsg arrives.
 		return "Loading…"
@@ -283,7 +286,8 @@ func (m *model) renderFooter() string {
 				kv("a", "apply"),
 				kv("e", "$EDITOR"),
 				kv("d", "delete"),
-				kv("r", "reload"),
+				kv("r", "refresh"),
+				kv("R", "reload"),
 				kv("q", "quit"),
 			)
 		} else {
